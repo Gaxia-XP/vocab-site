@@ -439,20 +439,17 @@
   }
 
   function renderQuick() {
-    [['p', document.getElementById('quick-prefixes'),'prefixList'],
-     ['s', document.getElementById('quick-suffixes'),'suffixList']].forEach(function(spec) {
-      var kind = spec[0], holder = spec[1], listName = spec[2];
+    var groups = [['p', document.getElementById('quick-prefixes'), prefixList],
+                  ['s', document.getElementById('quick-suffixes'), suffixList]];
+    groups.forEach(function(spec) {
+      var kind = spec[0], holder = spec[1], arr = spec[2];
       holder.innerHTML = '';
-      // "All letters" quick group? Keep simple: chips only
-      var arr = window[listName];
-      var active = arr;
-      window['quick_'+kind] && null;
-      // letter chips a–z for startIndex (prefix only — suffix uses 2-letter)
+      // a–z letter chips for start-filters
       if (kind === 'p') {
         'abcdefghijklmnopqrstuvwxyz'.split('').forEach(function(L) {
           var b = document.createElement('button');
           b.type='button';
-          b.className='quick-chip' + (active.indexOf(L)!==-1 ? ' on' : '');
+          b.className='quick-chip' + (arr.indexOf(L)!==-1 ? ' on' : '');
           b.textContent=L;
           b.addEventListener('click', function() {
             var idx = arr.indexOf(L);
@@ -463,9 +460,10 @@
         });
       }
       quickData[kind].forEach(function(v) {
+        if (kind === 'p' && v.length === 1) return; // single letters already added
         var b = document.createElement('button');
         b.type='button';
-        b.className='quick-chip' + (active.indexOf(v)!==-1 ? ' on' : '');
+        b.className='quick-chip' + (arr.indexOf(v)!==-1 ? ' on' : '');
         b.textContent=v;
         b.addEventListener('click', function() {
           var idx = arr.indexOf(v);
@@ -473,8 +471,6 @@
           renderChips(kind); renderQuick(); search();
         });
         holder.appendChild(b);
-        if (holder.children.length >= QUICK_LIMIT+26 && kind==='p') return;
-        if (holder.children.length >= QUICK_LIMIT && kind==='s') return;
       });
     });
   }
