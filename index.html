@@ -144,7 +144,7 @@
   var info     = document.getElementById('count-info');
   var markedEl = document.getElementById('marked');
   var markedCountEl = document.getElementById('marked-count');
-  var MAX = 300, MAXSUF = 20, shown = 0, cur = [];
+  var MAX = 300, MAXSUF = 40, shown = 0, cur = [];
   var activeTopic = null, activeList = null;
   var LS_LISTS = 'vocab-lists-v2';
 
@@ -395,8 +395,10 @@
       var x = document.createElement('span');
       x.className='x'; x.textContent='✕'; x.title='Remove filter';
       x.addEventListener('click', function(){
-        arr.splice(idx,1);
+        // single-filter mode: ✕ clears the active filter
+        arr.length = 0;
         renderChips(kind);
+        renderQuick();
         search();
       });
       chip.appendChild(txt); chip.appendChild(x);
@@ -406,9 +408,10 @@
 
   function addFromInput(kind, value) {
     var v = value.trim().toLowerCase();
-    if (!v || v.length>20) return false;
+    if (!v || v.length>40) return false;
     var arr = kind==='p' ? prefixList : suffixList;
-    if (arr.indexOf(v) !== -1) return false;  // dedupe
+    // SINGLE-FILTER MODE: a new pin replaces the old one
+    arr.length = 0;
     arr.push(v);
     renderChips(kind);
     renderQuick();
@@ -452,8 +455,10 @@
           b.className='quick-chip' + (arr.indexOf(L)!==-1 ? ' on' : '');
           b.textContent=L;
           b.addEventListener('click', function() {
-            var idx = arr.indexOf(L);
-            if (idx !== -1) arr.splice(idx,1); else arr.push(L);
+            // SINGLE-FILTER MODE: clicking a chip replaces the active filter
+            var isActive = (arr.indexOf(L) !== -1);
+            arr.length = 0;
+            if (!isActive) arr.push(L);
             renderChips('p'); renderQuick(); search();
           });
           holder.appendChild(b);
@@ -466,8 +471,10 @@
         b.className='quick-chip' + (arr.indexOf(v)!==-1 ? ' on' : '');
         b.textContent=v;
         b.addEventListener('click', function() {
-          var idx = arr.indexOf(v);
-          if (idx !== -1) arr.splice(idx,1); else arr.push(v);
+          // SINGLE-FILTER MODE: clicking a chip replaces the active filter
+          var isActive = (arr.indexOf(v) !== -1);
+          arr.length = 0;
+          if (!isActive) arr.push(v);
           renderChips(kind); renderQuick(); search();
         });
         holder.appendChild(b);
@@ -498,7 +505,7 @@
       out.innerHTML='<li class="empty">Type a prefix above to search by first letters…</li>';
       meta.textContent=''; cur=[]; return;
     }
-    if (pendingPrefix) pendingPrefix = pendingPrefix.slice(0,20);
+    if (pendingPrefix) pendingPrefix = pendingPrefix.slice(0,40);
     var prefixes = prefixList.slice();
     if (pendingPrefix && prefixes.indexOf(pendingPrefix) === -1) prefixes.push(pendingPrefix);
     var suffixes = suffixList.slice();
