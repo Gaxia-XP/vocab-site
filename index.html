@@ -50,6 +50,16 @@
   ul.wordlist li:last-child { border-bottom:none; }
   li.word-row { display:flex; align-items:center; gap:10px; }
   li.word-row:hover { background:var(--c-hover); }
+  .quick-row { display:flex; flex-wrap:wrap; gap:4px; margin:6px 0; }
+  .quick-chip {
+    padding:3px 8px; font-size:.8rem; font-weight:600; font-family:'JetBrains Mono', monospace;
+    border:1px solid var(--c-border-strong); border-radius:999px;
+    background:var(--c-elevated); color:var(--c-text); cursor:pointer;
+    transition:background .08s ease, border-color .08s ease, color .08s ease;
+  }
+  .quick-chip:hover { border-color:#7170FF; color:var(--c-ink); }
+  .quick-chip.on { background:#7170FF; border-color:#7170FF; color:#fff; }
+  .quick-label { font-size:.75rem; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--c-secondary); margin:10px 0 2px; }
   .word-text { font-family:'JetBrains Mono', ui-monospace, Consolas, Menlo, monospace; font-size:.98rem; color:var(--c-ink); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
   .ticks { display:flex; gap:5px; flex:0 0 auto; }
   .tick {
@@ -90,8 +100,12 @@
     <select id="topic-select" aria-label="Word topic"></select>
   </div>
   <div class="chips-row" id="prefix-chips"></div>
+  <div class="quick-label">Quick start-picks (click on/off)</div>
+  <div class="quick-row" id="quick-prefixes"></div>
   <input type="text" id="suffix" autocomplete="off" spellcheck="false" placeholder="Ends with… type + Enter to add (e.g. s, ing)">
   <div class="chips-row" id="suffix-chips"></div>
+  <div class="quick-label">Quick end-picks (click on/off)</div>
+  <div class="quick-row" id="quick-suffixes"></div>
 
   <div id="lists-bar">
     <div class="tc-row">
@@ -397,7 +411,72 @@
     if (arr.indexOf(v) !== -1) return false;  // dedupe
     arr.push(v);
     renderChips(kind);
+    renderQuick();
     return true;
+  }
+
+  // --- quick-pick chips: computed from the real corpus (2-letter starts, common suffixes) ---
+  var QUICK_LIMIT = 30;
+  var quickData = { p: [], s: [] };
+  function computeQuick() {
+    if (!words.length) return;
+    // 26 letter chips + top-2-letter prefixes by word count
+    var counts = {};
+    for (var i=0;i<words.length;i++) {
+      var w = words[i];
+      if (w.length >= 2) { var k = w.slice(0,2); counts[k] = (counts[k]||0)+1; }
+    }
+    var pairs = Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; });
+    quickData.p = pairs.slice(0, QUICK_LIMIT);
+    // suffix counts
+    var scount = {};
+    for (var j=0;j<words.length;j++) {
+      var w2 = words[j];
+      if (w2.length >= 2) { var k2 = w2.slice(-2); scount[k2] = (scount[k2]||0)+1; }
+    }
+    var spairs = Object.keys(scount).sort(function(a,b){ return scount[b]-scount[a]; });
+    quickData.s = spairs.slice(0, QUICK_LIMIT);
+  }
+
+  function renderQuick() {
+    [['p', document.getElementById('quick-prefixes'),'prefixList'],
+     ['s', document.getElementById('quick-suffixes'),'suffixList']].forEach(function(spec) {
+      var kind = spec[0], holder = spec[1], listName = spec[2];
+      holder.innerHTML = '';
+      // "All letters" quick group? Keep simple: chips only
+      var arr = window[listName];
+      var active = arr;
+      window['quick_'+kind] && null;
+      // letter chips a–z for startIndex (prefix only — suffix uses 2-letter)
+      if (kind === 'p') {
+        'abcdefghijklmnopqrstuvwxyz'.split('').forEach(function(L) {
+          var b = document.createElement('button');
+          b.type='button';
+          b.className='quick-chip' + (active.indexOf(L)!==-1 ? ' on' : '');
+          b.textContent=L;
+          b.addEventListener('click', function() {
+            var idx = arr.indexOf(L);
+            if (idx !== -1) arr.splice(idx,1); else arr.push(L);
+            renderChips('p'); renderQuick(); search();
+          });
+          holder.appendChild(b);
+        });
+      }
+      quickData[kind].forEach(function(v) {
+        var b = document.createElement('button');
+        b.type='button';
+        b.className='quick-chip' + (active.indexOf(v)!==-1 ? ' on' : '');
+        b.textContent=v;
+        b.addEventListener('click', function() {
+          var idx = arr.indexOf(v);
+          if (idx !== -1) arr.splice(idx,1); else arr.push(v);
+          renderChips(kind); renderQuick(); search();
+        });
+        holder.appendChild(b);
+        if (holder.children.length >= QUICK_LIMIT+26 && kind==='p') return;
+        if (holder.children.length >= QUICK_LIMIT && kind==='s') return;
+      });
+    });
   }
 
   input.addEventListener('keydown', function(e) {
@@ -459,7 +538,9 @@
 
   out.innerHTML='<li class="empty">Type a start-filter above and press Enter to pin it (or just keep typing to search live)…</li>';
   buildTopicSelect();
+  computeQuick();
   renderChips('p'); renderChips('s');
+  renderQuick();
   renderListsChips();
   renderMarked();
 })();
