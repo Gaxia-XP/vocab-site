@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>English Vocabulary Index</title>
+<!-- data from words.js: window.WORDS = [...] (370,112 words) -->
+<!-- design: Linear-inspired dark theme + user-created tick lists (e.g "exclude" hides words) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c-bg: #08090A; --c-surface: #0F1011; --c-elevated: #191A1B;
+    --c-ink: #F7F8F8; --c-text: #D0D6E0; --c-secondary: #8A8F98;
+    --c-border: rgba(255,255,255,0.05); --c-border-strong: rgba(255,255,255,0.09);
+    --c-hover: rgba(255,255,255,0.045); --c-danger: #FF8A7A;
+    --r-sm: 6px; --r-md: 10px; --r-lg: 16px;
+    --s-sm: 8px; --s-md: 16px; --s-lg: 24px;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif; margin:0; padding: var(--s-lg); background: var(--c-bg); color: var(--c-text); -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1080px; margin: 0 auto; background: var(--c-surface); padding: var(--s-lg); border-radius: var(--r-lg); border: 1px solid var(--c-border); }
+  h1 { color: var(--c-ink); font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 .15rem; }
+  .sub { color: var(--c-secondary); font-size: .9rem; font-weight: 500; margin: 0 0 var(--s-md); }
+  .controls-row { display:flex; gap:8px; }
+  .controls-row input[type=text] { width:auto; flex:1 1 0; min-width:0; }
+  #topic-select { padding:11px 12px; font-size:1rem; font-family:inherit; cursor:pointer; border:1px solid var(--c-border-strong); border-radius:var(--r-md); background:var(--c-elevated); color:var(--c-ink); outline:none; max-width:240px; flex:0 0 auto; }
+  #topic-select:focus { border-color:#7170FF; box-shadow:0 0 0 3px rgba(113,112,255,.2); }
+  input[type=text] { width:100%; padding:11px 12px; font-size:1rem; font-family:inherit; border:1px solid var(--c-border-strong); border-radius:var(--r-md); outline:none; background:var(--c-elevated); color:var(--c-ink); transition:border-color .12s ease, box-shadow .12s ease; }
+  input[type=text]::placeholder { color:var(--c-secondary); }
+  input[type=text]:focus { border-color:#7170FF; box-shadow:0 0 0 3px rgba(113,112,255,.2); }
+  .meta { margin: var(--s-sm) 0; color: var(--c-secondary); font-size:.92rem; font-weight:500; }
+  .panels { display:flex; gap:var(--s-md); align-items:flex-start; margin-top:var(--s-sm); }
+  .panel { flex:1 1 0; min-width:0; }
+  .panel h2 { font-size:.8rem; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--c-secondary); margin:0 0 .55rem; }
+  .panel h2 .count { color:var(--c-ink); font-weight:700; letter-spacing:0; text-transform:none; }
+  ul.wordlist { max-height:42vh; overflow-y:auto; border:1px solid var(--c-border-strong); border-radius:var(--r-md); padding:var(--s-sm) 0; margin:0; list-style:none; background:var(--c-elevated); }
+  ul.wordlist li { padding:7px 12px; font-size:1rem; line-height:1.4; border-bottom:1px solid var(--c-border); }
+  ul.wordlist li:last-child { border-bottom:none; }
+  li.word-row { display:flex; align-items:center; gap:10px; }
+  li.word-row:hover { background:var(--c-hover); }
+  .word-text { font-family:'JetBrains Mono', ui-monospace, Consolas, Menlo, monospace; font-size:.98rem; color:var(--c-ink); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .ticks { display:flex; gap:5px; flex:0 0 auto; }
+  .tick {
+    width:17px; height:17px; border-radius:4px;
+    border:1.5px solid rgba(255,255,255,0.3); background:transparent; cursor:pointer; padding:0; position:relative;
+    transition:border-color .1s ease, background .1s ease;
+  }
+  .tick:hover { border-color: var(--tick-color, #7170FF); }
+  .tick.on { background: var(--tick-color, #7170FF); border-color: var(--tick-color, #7170FF); }
+  .tick.on::after { content:""; position:absolute; inset:0;
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>') center/12px no-repeat; }
+  #lists-bar { margin: var(--s-sm) 0 }
+  .tc-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  #new-list-name, #new-list-color { padding:8px 10px; font-size:.9rem; font-family:inherit; border:1px solid var(--c-border-strong); border-radius:var(--r-sm); background:var(--c-elevated); color:var(--c-ink); outline:none; }
+  #new-list-color { width:46px; padding:4px 6px; cursor:pointer; }
+  .btn-quiet { padding:8px 12px; font-size:.9rem; font-weight:600; font-family:inherit; cursor:pointer; border:1px solid var(--c-border-strong); border-radius:var(--r-sm); background:var(--c-elevated); color:var(--c-text); transition:background .08s ease; }
+  .btn-quiet:hover { background:var(--c-hover); color:var(--c-ink); }
+  .btn-quiet:active { transform: translateY(1px); }
+  #lists-chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:6px; }
+  .list-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; font-size:.85rem; font-weight:600; font-family:inherit; cursor:pointer; border:1px solid var(--chip-color, rgba(255,255,255,0.3)); border-radius:999px; background:transparent; color:var(--c-text); }
+  .list-chip.sel { background: var(--chip-color, rgba(255,255,255,0.1)); }
+  .list-chip.sel .label, .list-chip.sel .n { color:#fff; }
+  .list-chip .dot { width:9px; height:9px; border-radius:50%; background:var(--chip-color, #7170FF); }
+  .list-chip .n { color:var(--c-secondary); font-weight:500; }
+  .list-chip .x { color:var(--c-secondary); font-weight:700; margin-left:2px; }
+  .list-chip .x:hover { color:var(--c-danger); }
+  #show-more, #clear-marked { margin-top: var(--s-sm); display:inline-block; }
+  .empty { color: var(--c-secondary); font-style: italic; }
+  @media (max-width: 640px) { .panels { flex-direction:column; } body { padding:var(--s-md); } .wrap { padding:var(--s-md); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>English Vocabulary Index</h1>
+  <p class="sub" id="count-info"></p>
+  <div class="controls-row">
+    <input type="text" id="search" autofocus autocomplete="off" spellcheck="false" placeholder="Type first letters… e.g. xe, xi, so">
+    <select id="topic-select" aria-label="Word topic"></select>
+  </div>
+  <input type="text" id="suffix" autocomplete="off" spellcheck="false" placeholder="Last letters… e.g. s, ing, ed (optional)">
+
+  <div id="lists-bar">
+    <div class="tc-row">
+      <input type="text" id="new-list-name" placeholder="New list name… e.g. exclude" maxlength="32">
+      <input type="color" id="new-list-color" value="#FF5252" title="List color">
+      <button id="add-list" type="button" class="btn-quiet">+ Add list</button>
+    </div>
+    <div id="lists-chips"></div>
+  </div>
+
+  <p class="meta" id="match-count"></p>
+  <div class="panels">
+    <div class="panel">
+      <h2>Matched</h2>
+      <ul id="results" class="wordlist"></ul>
+      <button id="show-more" type="button" class="btn-quiet">Show more</button>
+    </div>
+    <div class="panel" id="marked-section">
+      <h2>List contents <span class="count" id="marked-count"></span></h2>
+      <ul id="marked" class="wordlist"></ul>
+      <button id="clear-marked" type="button" class="btn-quiet">Clear current list</button>
+    </div>
+  </div>
+</div>
+
+<script src="words.js"></script>
+<script src="topics.js"></script>
+<script>
+(function() {
+  var words = window.WORDS || [];
+  var topics  = window.TOPICS || {};
+  var input    = document.getElementById('search');
+  var suf      = document.getElementById('suffix');
+  var out      = document.getElementById('results');
+  var meta     = document.getElementById('match-count');
+  var info     = document.getElementById('count-info');
+  var markedEl = document.getElementById('marked');
+  var markedCountEl = document.getElementById('marked-count');
+  var MAX = 300, MAXSUF = 20, shown = 0, cur = [];
+  var activeTopic = null, activeList = null;
+  var LS_LISTS = 'vocab-lists-v2';
+
+  info.textContent = words.length.toLocaleString() + ' words loaded';
+  if (!words.length) { meta.textContent = 'words.js missing or failed to load.'; return; }
+
+  // user lists [{name,color,words:{word:1}}], persisted
+  var lists = [];
+  try {
+    var parsed = JSON.parse(localStorage.getItem(LS_LISTS) || '[]');
+    if (Array.isArray(parsed)) lists = parsed.filter(function(l){return l && l.name && l.color && l.words;});
+  } catch (e) { lists = []; }
+  function saveLists() { try { localStorage.setItem(LS_LISTS, JSON.stringify(lists)); } catch (e) {} }
+  function getList(name) { for (var i=0;i<lists.length;i++) if (lists[i].name===name) return lists[i]; return null; }
+
+  var topicSelect = document.getElementById('topic-select');
+  function buildTopicSelect() {
+    topicSelect.innerHTML = '';
+    var names = Object.keys(topics);
+    if (!names.length) { topicSelect.style.display='none'; return; }
+    var all = document.createElement('option');
+    all.value=''; all.textContent='All words (' + words.length.toLocaleString() + ')';
+    topicSelect.appendChild(all);
+    names.forEach(function(name){
+      var o = document.createElement('option');
+      o.value=name; o.textContent=name + ' (' + topics[name].length + ')';
+      topicSelect.appendChild(o);
+    });
+    topicSelect.value = activeTopic || '';
+  }
+  topicSelect.addEventListener('change', function() {
+    activeTopic = topicSelect.value || null;
+    search();
+  });
+
+  function renderListsChips() {
+    var chips = document.getElementById('lists-chips');
+    chips.innerHTML = '';
+    if (!lists.length) {
+      var hint = document.createElement('span');
+      hint.className='empty';
+      hint.textContent='No lists yet — create one above (e.g. "exclude", pick red). Tick-boxes appear on every word row.';
+      chips.appendChild(hint);
+      return;
+    }
+    lists.forEach(function(l) {
+      var count = Object.keys(l.words).length;
+      var chip = document.createElement('button');
+      chip.type='button';
+      chip.className='list-chip' + (activeList===l.name ? ' sel' : '');
+      chip.style.setProperty('--chip-color', l.color);
+      var dot=document.createElement('span'); dot.className='dot';
+      var lab=document.createElement('span'); lab.className='label'; lab.textContent=l.name + ' ';
+      var n=document.createElement('span'); n.className='n'; n.textContent='('+count+')';
+      chip.appendChild(dot); chip.appendChild(lab); chip.appendChild(n);
+      chip.addEventListener('click', function(){
+        activeList = (activeList===l.name) ? null : l.name;
+        renderListsChips(); renderMarked();
+      });
+      var x=document.createElement('span'); x.className='x'; x.textContent='✕'; x.title='Delete list';
+      x.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        if (!confirm('Delete list "'+l.name+'" and its '+count+' ticked words?')) return;
+        lists = lists.filter(function(o){return o!==l;});
+        if (activeList===l.name) activeList=null;
+        saveLists(); renderListsChips(); renderMarked(); search();
+      });
+      chip.appendChild(x);
+      chips.appendChild(chip);
+    });
+  }
+
+  document.getElementById('add-list').addEventListener('click', function() {
+    var nameEl = document.getElementById('new-list-name');
+    var colEl  = document.getElementById('new-list-color');
+    var name = nameEl.value.trim();
+    if (!name) { nameEl.focus(); return; }
+    if (getList(name)) { alert('A list named "'+name+'" already exists.'); return; }
+    lists.push({ name:name, color:colEl.value, words:{} });
+    saveLists();
+    nameEl.value='';
+    renderListsChips();
+    search();  // new list may be "exclude" — refresh exclusions
+  });
+
+  function toggleTick(word, listName) {
+    var l = getList(listName);
+    if (!l) return;
+    if (l.words[word]) delete l.words[word];
+    else l.words[word] = 1;
+    saveLists();
+    renderListsChips();
+    restateTicks(word);
+    if (activeList===listName) renderMarked();
+    search();  // recount exclusions after any tick
+  }
+
+  function paintTicks(li, word) {
+    var holder = li.querySelector('.ticks');
+    if (!holder) return;
+    holder.innerHTML='';
+    lists.forEach(function(l) {
+      var t = document.createElement('button');
+      t.type='button';
+      t.className='tick' + (l.words[word] ? ' on' : '');
+      t.style.setProperty('--tick-color', l.color);
+      t.title=(l.words[word] ? 'Untick "' : 'Tick "')+l.name+'"';
+      t.setAttribute('aria-label', l.name+': '+word);
+      t.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        toggleTick(word, l.name);
+      });
+      holder.appendChild(t);
+    });
+  }
+
+  function restateTicks(word) {
+    var items = out.querySelectorAll('li.word-row');
+    for (var i=0;i<items.length;i++) {
+      var t = items[i].querySelector('.word-text');
+      if (t && t.textContent===word) paintTicks(items[i], word);
+    }
+    if (activeList) {
+      var mitems = markedEl.querySelectorAll('li.word-row');
+      for (var j=0;j<mitems.length;j++) {
+        var m = mitems[j].querySelector('.word-text');
+        if (m && m.textContent===word) paintTicks(mitems[j], word);
+      }
+    }
+  }
+
+  function makeWordLi(word) {
+    var li = document.createElement('li');
+    li.className='word-row';
+    var span = document.createElement('span');
+    span.className='word-text';
+    span.textContent=word;
+    li.appendChild(span);
+    var ticks = document.createElement('span');
+    ticks.className='ticks';
+    li.appendChild(ticks);
+    paintTicks(li, word);
+    return li;
+  }
+
+  function renderMarked() {
+    markedEl.innerHTML='';
+    if (!activeList) {
+      markedCountEl.textContent='';
+      var li = document.createElement('li');
+      li.className='empty';
+      li.textContent='Pick a list chip above to see its ticked words here.';
+      markedEl.appendChild(li);
+      return;
+    }
+    var l = getList(activeList);
+    if (!l) { activeList=null; return renderMarked(); }
+    var keys = Object.keys(l.words);
+    markedCountEl.textContent = keys.length ? '('+keys.length.toLocaleString()+')' : '';
+    if (!keys.length) {
+      var e = document.createElement('li');
+      e.className='empty';
+      e.textContent='Nothing ticked in "'+l.name+'" yet — use its colored box on any word row.';
+      markedEl.appendChild(e);
+      return;
+    }
+    keys.sort();
+    var frag = document.createDocumentFragment();
+    keys.forEach(function(w) {
+      var li = document.createElement('li');
+      li.className='word-row';
+      var span=document.createElement('span'); span.className='word-text'; span.textContent=w;
+      li.appendChild(span);
+      var ticks=document.createElement('span'); ticks.className='ticks'; li.appendChild(ticks);
+      frag.appendChild(li);
+      paintTicks(li, w);
+      li.addEventListener('click', function(){ toggleTick(w, l.name); });
+    });
+    markedEl.appendChild(frag);
+  }
+
+  function appendMore(n) {
+    var end = Math.min(cur.length, shown+n);
+    var frag = document.createDocumentFragment();
+    for (var i=shown;i<end;i++) frag.appendChild(makeWordLi(cur[i]));
+    out.appendChild(frag);
+    shown = end;
+    meta.textContent = cur.length>shown
+      ? 'Matched '+cur.length.toLocaleString()+' words — showing '+shown.toLocaleString()+' (click Show more for the rest)'
+      : 'Matched '+cur.length.toLocaleString()+' words';
+  }
+
+  document.getElementById('show-more').addEventListener('click', function(){ appendMore(MAX); });
+
+  document.getElementById('clear-marked').addEventListener('click', function() {
+    if (!activeList) { alert('Pick a list chip first.'); return; }
+    var l = getList(activeList);
+    var n = Object.keys(l.words).length;
+    if (!n) return;
+    if (!confirm('Untick all '+n+' words in "'+l.name+'"?')) return;
+    l.words = {};
+    saveLists();
+    renderListsChips(); renderMarked(); search();
+  });
+
+  function render(list, suffix, hiddenCount) {
+    out.innerHTML='';
+    shown=0; cur=list;
+    if (!list.length) {
+      var msg;
+      if (input.value.trim() && !suffix) msg='No words start with that prefix.';
+      else if (!input.value.trim() && suffix) msg='No words end with "'+suffix+'".';
+      else msg='No words with that prefix + suffix combination.';
+      if (hiddenCount) msg += ' ('+hiddenCount.toLocaleString()+' excluded word'+(hiddenCount>1?'s':'')+' hidden — untick in the "exclude" list to bring back.)';
+      var li=document.createElement('li');
+      li.className='empty';
+      li.textContent=msg;
+      out.appendChild(li);
+      meta.textContent='';
+      return;
+    }
+    appendMore(MAX);
+  }
+
+  function bothEmpty() { return !input.value.trim() && !suf.value.trim(); }
+  function excludeSet() { var l=getList('exclude'); return l ? l.words : null; }
+
+  function search() {
+    var pool = words;
+    if (activeTopic && topics[activeTopic]) pool = topics[activeTopic].slice().sort();
+    if (bothEmpty()) {
+      if (activeTopic) {
+        var wlist=[], hiddenTopic=0, exT=excludeSet();
+        for (var j=0;j<pool.length;j++) {
+          if (exT && exT[pool[j]]) { hiddenTopic++; continue; }
+          wlist.push(pool[j]);
+        }
+        if (!wlist.length && hiddenTopic) {
+          out.innerHTML='<li class="empty">All '+hiddenTopic+' words in "'+activeTopic+'" are excluded.</li>';
+          meta.textContent=''; cur=[]; return;
+        }
+        render(wlist, '', hiddenTopic);
+        meta.textContent='Topic "'+activeTopic+'" — '+wlist.length.toLocaleString()+' words'+(hiddenTopic?' ('+hiddenTopic+' excluded)':'');
+        return;
+      }
+      out.innerHTML='<li class="empty">Type a prefix above to search by first letters…</li>';
+      meta.textContent=''; cur=[]; return;
+    }
+    var prefix = input.value.trim().toLowerCase();
+    var suffix = suf.value.trim().toLowerCase();
+    if (prefix.length>20) prefix=prefix.slice(0,20);
+    if (suffix.length>MAXSUF) suffix=suffix.slice(0,MAXSUF);
+    var ex=excludeSet();
+    var list=[], hiddenCount=0;
+    for (var i=0;i<pool.length;i++) {
+      var w=pool[i];
+      if (prefix && w.indexOf(prefix)!==0) continue;
+      if (suffix && !w.endsWith(suffix)) continue;
+      if (ex && ex[w]) { hiddenCount++; continue; }
+      list.push(w);
+    }
+    render(list, suffix, hiddenCount);
+  }
+
+  out.innerHTML='<li class="empty">Type a prefix above to search by first letters…</li>';
+  buildTopicSelect();
+  renderListsChips();
+  renderMarked();
+  input.addEventListener('input', search);
+  suf.addEventListener('input', search);
+})();
+</script>
+</body>
+</html>
