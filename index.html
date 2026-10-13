@@ -25,6 +25,16 @@
   .sub { color: var(--c-secondary); font-size: .9rem; font-weight: 500; margin: 0 0 var(--s-md); }
   .controls-row { display:flex; gap:8px; }
   .controls-row input[type=text] { width:auto; flex:1 1 0; min-width:0; }
+  .chips-row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0; min-height:26px; }
+  .chips-row .chip {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:4px 9px; font-size:.85rem; font-weight:600; font-family:'JetBrains Mono', monospace;
+    border:1px solid var(--chip-color, rgba(255,255,255,0.3)); border-radius:999px;
+    background:var(--c-elevated); color:var(--c-ink);
+  }
+  .chips-row .chip .x { color:var(--c-secondary); font-weight:700; cursor:pointer; padding:0 2px; }
+  .chips-row .chip .x:hover { color:var(--c-danger); }
+  .chips-row .chips-hint { color:var(--c-secondary); font-size:.85rem; font-style:italic; }
   #topic-select { padding:11px 12px; font-size:1rem; font-family:inherit; cursor:pointer; border:1px solid var(--c-border-strong); border-radius:var(--r-md); background:var(--c-elevated); color:var(--c-ink); outline:none; max-width:240px; flex:0 0 auto; }
   #topic-select:focus { border-color:#7170FF; box-shadow:0 0 0 3px rgba(113,112,255,.2); }
   input[type=text] { width:100%; padding:11px 12px; font-size:1rem; font-family:inherit; border:1px solid var(--c-border-strong); border-radius:var(--r-md); outline:none; background:var(--c-elevated); color:var(--c-ink); transition:border-color .12s ease, box-shadow .12s ease; }
@@ -76,10 +86,12 @@
   <h1>English Vocabulary Index</h1>
   <p class="sub" id="count-info"></p>
   <div class="controls-row">
-    <input type="text" id="search" autofocus autocomplete="off" spellcheck="false" placeholder="Type first letters… e.g. xe, xi, so">
+    <input type="text" id="search" autofocus autocomplete="off" spellcheck="false" placeholder="Starts with… type + Enter to add (e.g. xe or so)">
     <select id="topic-select" aria-label="Word topic"></select>
   </div>
-  <input type="text" id="suffix" autocomplete="off" spellcheck="false" placeholder="Last letters… e.g. s, ing, ed (optional)">
+  <div class="chips-row" id="prefix-chips"></div>
+  <input type="text" id="suffix" autocomplete="off" spellcheck="false" placeholder="Ends with… type + Enter to add (e.g. s, ing)">
+  <div class="chips-row" id="suffix-chips"></div>
 
   <div id="lists-bar">
     <div class="tc-row">
@@ -324,14 +336,14 @@
     renderListsChips(); renderMarked(); search();
   });
 
-  function render(list, suffix, hiddenCount) {
+  function render(list, suffixes, prefixes, hiddenCount) {
     out.innerHTML='';
     shown=0; cur=list;
     if (!list.length) {
       var msg;
-      if (input.value.trim() && !suffix) msg='No words start with that prefix.';
-      else if (!input.value.trim() && suffix) msg='No words end with "'+suffix+'".';
-      else msg='No words with that prefix + suffix combination.';
+      if (prefixes.length && !suffixes.length) msg='No words start with ' + prefixes.join('/') + '.';
+      else if (!prefixes.length && suffixes.length) msg='No words end with ' + suffixes.join('/') + '.';
+      else msg='No words with that prefix/suffix combination.';
       if (hiddenCount) msg += ' ('+hiddenCount.toLocaleString()+' excluded word'+(hiddenCount>1?'s':'')+' hidden — untick in the "exclude" list to bring back.)';
       var li=document.createElement('li');
       li.className='empty';
@@ -343,52 +355,113 @@
     appendMore(MAX);
   }
 
-  function bothEmpty() { return !input.value.trim() && !suf.value.trim(); }
+  // --- multi-prefix / multi-suffix chips ---
+  var prefixList = [];   // e.g. ['xe','so']
+  var suffixList = [];   // e.g. ['s','ing']
+  var prefixChips = document.getElementById('prefix-chips');
+  var suffixChips = document.getElementById('suffix-chips');
+
+  function renderChips(kind) {
+    var holder = kind==='p' ? prefixChips : suffixChips;
+    var arr    = kind==='p' ? prefixList  : suffixList;
+    holder.innerHTML='';
+    if (!arr.length) {
+      var hint = document.createElement('span');
+      hint.className='chips-hint';
+      hint.textContent = kind==='p' ? 'no start-filters yet' : 'no end-filters yet';
+      holder.appendChild(hint);
+      return;
+    }
+    arr.forEach(function(val, idx) {
+      var chip = document.createElement('span');
+      chip.className='chip';
+      chip.style.setProperty('--chip-color', kind==='p' ? '#7170FF' : '#10B981');
+      var txt = document.createElement('span');
+      txt.textContent = (kind==='p' ? '▲ ' : '▼ ') + val;
+      var x = document.createElement('span');
+      x.className='x'; x.textContent='✕'; x.title='Remove filter';
+      x.addEventListener('click', function(){
+        arr.splice(idx,1);
+        renderChips(kind);
+        search();
+      });
+      chip.appendChild(txt); chip.appendChild(x);
+      holder.appendChild(chip);
+    });
+  }
+
+  function addFromInput(kind, value) {
+    var v = value.trim().toLowerCase();
+    if (!v || v.length>20) return false;
+    var arr = kind==='p' ? prefixList : suffixList;
+    if (arr.indexOf(v) !== -1) return false;  // dedupe
+    arr.push(v);
+    renderChips(kind);
+    return true;
+  }
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    if (addFromInput('p', input.value)) { input.value=''; search(); }
+  });
+  input.addEventListener('input', search);
+
+  suf.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    if (addFromInput('s', suf.value)) { suf.value=''; search(); }
+  });
+  suf.addEventListener('input', search);
+
   function excludeSet() { var l=getList('exclude'); return l ? l.words : null; }
 
   function search() {
     var pool = words;
     if (activeTopic && topics[activeTopic]) pool = topics[activeTopic].slice().sort();
-    if (bothEmpty()) {
-      if (activeTopic) {
-        var wlist=[], hiddenTopic=0, exT=excludeSet();
-        for (var j=0;j<pool.length;j++) {
-          if (exT && exT[pool[j]]) { hiddenTopic++; continue; }
-          wlist.push(pool[j]);
-        }
-        if (!wlist.length && hiddenTopic) {
-          out.innerHTML='<li class="empty">All '+hiddenTopic+' words in "'+activeTopic+'" are excluded.</li>';
-          meta.textContent=''; cur=[]; return;
-        }
-        render(wlist, '', hiddenTopic);
-        meta.textContent='Topic "'+activeTopic+'" — '+wlist.length.toLocaleString()+' words'+(hiddenTopic?' ('+hiddenTopic+' excluded)':'');
-        return;
-      }
+    var pendingPrefix = input.value.trim().toLowerCase();  // still being typed — apply live too
+    var hasFilter = prefixList.length || suffixList.length || pendingPrefix.length || activeTopic;
+    if (!hasFilter) {
       out.innerHTML='<li class="empty">Type a prefix above to search by first letters…</li>';
       meta.textContent=''; cur=[]; return;
     }
-    var prefix = input.value.trim().toLowerCase();
-    var suffix = suf.value.trim().toLowerCase();
-    if (prefix.length>20) prefix=prefix.slice(0,20);
-    if (suffix.length>MAXSUF) suffix=suffix.slice(0,MAXSUF);
+    if (pendingPrefix) pendingPrefix = pendingPrefix.slice(0,20);
+    var prefixes = prefixList.slice();
+    if (pendingPrefix && prefixes.indexOf(pendingPrefix) === -1) prefixes.push(pendingPrefix);
+    var suffixes = suffixList.slice();
     var ex=excludeSet();
     var list=[], hiddenCount=0;
+    // A word matches if it matches ANY one of the prefixes AND ANY one of the suffixes
+    // (union logic: each filter type is OR, both types are AND together)
     for (var i=0;i<pool.length;i++) {
       var w=pool[i];
-      if (prefix && w.indexOf(prefix)!==0) continue;
-      if (suffix && !w.endsWith(suffix)) continue;
+      if (prefixes.length) {
+        var pOk = false;
+        for (var p=0;p<prefixes.length;p++) {
+          if (w.indexOf(prefixes[p])===0) { pOk=true; break; }
+        }
+        if (!pOk) continue;
+      }
+      if (suffixes.length) {
+        var sOk = false;
+        for (var s=0;s<suffixes.length;s++) {
+          if (w.endsWith(suffixes[s])) { sOk=true; break; }
+        }
+        if (!sOk) continue;
+      }
       if (ex && ex[w]) { hiddenCount++; continue; }
       list.push(w);
     }
-    render(list, suffix, hiddenCount);
+    if (activeTopic && !pendingPrefix && !prefixList.length && !suffixList.length) {
+      // pure topic view
+      meta.textContent='Topic "'+activeTopic+'" — '+list.length.toLocaleString()+' words'+(hiddenCount?' ('+hiddenCount+' excluded)':'');
+    }
+    render(list, suffixes, prefixes, hiddenCount);
   }
 
-  out.innerHTML='<li class="empty">Type a prefix above to search by first letters…</li>';
+  out.innerHTML='<li class="empty">Type a start-filter above and press Enter to pin it (or just keep typing to search live)…</li>';
   buildTopicSelect();
+  renderChips('p'); renderChips('s');
   renderListsChips();
   renderMarked();
-  input.addEventListener('input', search);
-  suf.addEventListener('input', search);
 })();
 </script>
 </body>
