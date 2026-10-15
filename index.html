@@ -35,6 +35,9 @@
   .chips-row .chip .x { color:var(--c-secondary); font-weight:700; cursor:pointer; padding:0 2px; }
   .chips-row .chip .x:hover { color:var(--c-danger); }
   .chips-row .chips-hint { color:var(--c-secondary); font-size:.85rem; font-style:italic; }
+  #source-select, #sort-select { padding:9px 10px; font-size:.9rem; font-family:inherit; cursor:pointer; border:1px solid var(--c-border-strong); border-radius:var(--r-sm); background:var(--c-elevated); color:var(--c-ink); outline:none; }
+  .source-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 var(--s-sm); }
+  .source-row label { color:var(--c-secondary); font-size:.85rem; font-weight:600; }
   #topic-select { padding:11px 12px; font-size:1rem; font-family:inherit; cursor:pointer; border:1px solid var(--c-border-strong); border-radius:var(--r-md); background:var(--c-elevated); color:var(--c-ink); outline:none; max-width:240px; flex:0 0 auto; }
   #topic-select:focus { border-color:#7170FF; box-shadow:0 0 0 3px rgba(113,112,255,.2); }
   input[type=text] { width:100%; padding:11px 12px; font-size:1rem; font-family:inherit; border:1px solid var(--c-border-strong); border-radius:var(--r-md); outline:none; background:var(--c-elevated); color:var(--c-ink); transition:border-color .12s ease, box-shadow .12s ease; }
@@ -95,6 +98,20 @@
 <div class="wrap">
   <h1>English Vocabulary Index</h1>
   <p class="sub" id="count-info"></p>
+  <div class="source-row">
+    <label for="source-select">Words:</label>
+    <select id="source-select" aria-label="Word source">
+      <option value="30">Very common only</option>
+      <option value="20">Common (game-friendly)</option>
+      <option value="15">Common + less common</option>
+      <option value="0">All words (incl. rare)</option>
+    </select>
+    <label for="sort-select">Sort:</label>
+    <select id="sort-select" aria-label="Sort order">
+      <option value="freq">Most common first</option>
+      <option value="az">A → Z</option>
+    </select>
+  </div>
   <div class="controls-row">
     <input type="text" id="search" autofocus autocomplete="off" spellcheck="false" placeholder="Starts with… type + Enter to add (e.g. xe or so)">
     <select id="topic-select" aria-label="Word topic"></select>
@@ -133,9 +150,46 @@
 
 <script src="words.js"></script>
 <script src="topics.js"></script>
+<script src="common.js"></script>
 <script>
 (function() {
-  var words = window.WORDS || [];
+  var allWords = window.WORDS || [];
+  var common = window.COMMON || { words: [], zipf: [] };
+  var commonRank = Object.create(null);
+  for (var ci=0; ci<common.words.length; ci++) commonRank[common.words[ci]] = ci;
+  var LS_SOURCE = 'vocab-source-v1';
+  var source = { level: common.words.length ? 20 : 0, sort: 'freq' };
+  try {
+    var savedSrc = JSON.parse(localStorage.getItem(LS_SOURCE) || 'null');
+    if (savedSrc && typeof savedSrc.level === 'number' && (savedSrc.level === 0 || common.words.length)) source.level = savedSrc.level;
+    if (savedSrc && (savedSrc.sort === 'az' || savedSrc.sort === 'freq')) source.sort = savedSrc.sort;
+  } catch (e) {}
+  function inLevel(w) {
+    if (!source.level) return true;
+    var r = commonRank[w];
+    return r !== undefined && common.zipf[r] >= source.level;
+  }
+  function byFreq(a, b) {
+    var ra = commonRank[a], rb = commonRank[b];
+    if (ra === undefined && rb === undefined) return a < b ? -1 : a > b ? 1 : 0;
+    if (ra === undefined) return 1;
+    if (rb === undefined) return -1;
+    return ra - rb;
+  }
+  // current word pool for the chosen source + sort
+  function buildWords() {
+    var list;
+    if (source.level) {
+      list = [];
+      for (var i=0;i<common.words.length;i++) if (common.zipf[i] >= source.level) list.push(common.words[i]);
+      if (source.sort === 'az') list.sort();
+    } else {
+      list = allWords;
+      if (source.sort === 'freq') list = allWords.slice().sort(byFreq);
+    }
+    return list;
+  }
+  var words = buildWords();
   var topics  = window.TOPICS || {};
   var input    = document.getElementById('search');
   var suf      = document.getElementById('suffix');
@@ -148,8 +202,11 @@
   var activeTopic = null, activeList = null;
   var LS_LISTS = 'vocab-lists-v2';
 
-  info.textContent = words.length.toLocaleString() + ' words loaded';
-  if (!words.length) { meta.textContent = 'words.js missing or failed to load.'; return; }
+  function updateInfo() {
+    info.textContent = words.length.toLocaleString() + ' words in use (' + allWords.length.toLocaleString() + ' total)';
+  }
+  updateInfo();
+  if (!allWords.length) { meta.textContent = 'words.js missing or failed to load.'; return; }
 
   // user lists [{name,color,words:{word:1}}], persisted
   var lists = [];
@@ -166,7 +223,7 @@
     var names = Object.keys(topics);
     if (!names.length) { topicSelect.style.display='none'; return; }
     var all = document.createElement('option');
-    all.value=''; all.textContent='All words (' + words.length.toLocaleString() + ')';
+    all.value=''; all.textContent='All topics (' + words.length.toLocaleString() + ')';
     topicSelect.appendChild(all);
     names.forEach(function(name){
       var o = document.createElement('option');
@@ -498,7 +555,10 @@
 
   function search() {
     var pool = words;
-    if (activeTopic && topics[activeTopic]) pool = topics[activeTopic].slice().sort();
+    if (activeTopic && topics[activeTopic]) {
+      pool = topics[activeTopic].filter(inLevel);
+      if (source.sort === 'freq') pool.sort(byFreq); else pool.sort();
+    }
     var pendingPrefix = input.value.trim().toLowerCase();  // still being typed — apply live too
     var hasFilter = prefixList.length || suffixList.length || pendingPrefix.length || activeTopic;
     if (!hasFilter) {
@@ -538,6 +598,22 @@
     }
     render(list, suffixes, prefixes, hiddenCount);
   }
+
+  var sourceSelect = document.getElementById('source-select');
+  var sortSelect = document.getElementById('sort-select');
+  if (!common.words.length) sourceSelect.disabled = true;
+  sourceSelect.value = String(source.level);
+  sortSelect.value = source.sort;
+  function onSourceChange() {
+    source.level = parseInt(sourceSelect.value, 10) || 0;
+    source.sort = sortSelect.value;
+    try { localStorage.setItem(LS_SOURCE, JSON.stringify(source)); } catch (e) {}
+    words = buildWords();
+    updateInfo(); buildTopicSelect(); computeQuick(); renderQuick();
+    search();
+  }
+  sourceSelect.addEventListener('change', onSourceChange);
+  sortSelect.addEventListener('change', onSourceChange);
 
   out.innerHTML='<li class="empty">Type a start-filter above and press Enter to pin it (or just keep typing to search live)…</li>';
   buildTopicSelect();
